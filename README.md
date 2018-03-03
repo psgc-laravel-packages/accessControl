@@ -3,9 +3,12 @@
 ## Usage:
 
 1. extend base class AccessManager...
+
 2. Implement :
+
     abstract protected function getAccessMatrix()
-3. ptional: override to set super admin roles:
+
+3. Optional: override to set super admin roles:
 
     protected function setSuperadminRoles();
     {
