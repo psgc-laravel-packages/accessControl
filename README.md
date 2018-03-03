@@ -10,10 +10,10 @@
 
 3. Optional: override to set super admin roles:
 
-    protected function setSuperadminRoles();
+    ```protected function setSuperadminRoles();
     {
         $this->_superadminRoles = ['super-admin'];
-    }
+    }```
 
 ## Example:
 
@@ -87,4 +87,3 @@ Add via middleware in routes file...:
        ...
     });
 
-PSG
