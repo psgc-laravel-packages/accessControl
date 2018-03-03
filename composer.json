@@ -1,0 +1,20 @@
+{
+    "name": "psgc-laravel-packages/accessControl",
+    "description": "Access control for middleware use",
+    "keywords": ["laravel", "utils"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "psgc-laravel-packages",
+            "email": "peter@peltronic.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "PsgcLaravelPackages\\AccessControl\\": "src/"
+        }
+    },
+    "require": {
+        "illuminate/support": "~5"
+    }
+}
