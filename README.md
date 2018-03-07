@@ -6,7 +6,7 @@
 
 2. Implement :
 
-    abstract protected function getAccessMatrix()
+    abstract protected function accessMatrix()
 
 3. Optional: override to set super admin roles:
 
@@ -24,23 +24,23 @@ protected function setSuperadminRoles();
     class CheckSiteRole extends AccessManager
     {
 
-        protected function getAccessMatrix() {
+        protected function accessMatrix() {
         return [
     
                 'site.dashboard.show'=>[
-                    'newlogix-admin'=>'all',
+                    //'super-admin'=>'all',
                     'fielder'=>'all',
                     'project-manager'=>'all',
                 ],
     
                 'site.accounts.index'=>[
-                    'newlogix-admin'=>'all',
+                    //'super-admin'=>'all',
                     'fielder'=>'all',
                     'project-manager'=>'all',
                 ],
                 ...
                 'site.profiles.show'=>[
-                    'newlogix-admin'=>'all',
+                    //'super-admin'=>'all',
                     'fielder'=>function($user,$routeParams,$queryParams) {
                         $user = \App\Models\User::findByUsername($routeParams['username']);
                         $isAllowed = ($user->id == $this->_sessionUser->id);
@@ -54,7 +54,7 @@ protected function setSuperadminRoles();
                 ],
                 ...
                 'agency.formcomponents.show'=>[
-                    'newlogix-admin'=>'all',
+                    //'super-admin'=>'all',
                     'agency-admin'=>function($user,$routeParams,$queryParams) {
                         $agency = $user->ofAgency();
                         $formcomponent = \App\Models\Formcomponent::findBySlug($routeParams['formcomponent']);
