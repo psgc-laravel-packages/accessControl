@@ -74,13 +74,13 @@ abstract class AccessManager
 
             // === Do the check (set $isAllowed) ===
 
-            $isAllowed = false; // init: default is to deny access
-
             // find access check scalar or delegate function/closure
             if ( array_key_exists('exact',$matchingRoutes) ) {
                 $isAllowed = $this->isAllowed($matchingRoutes['exact'],$requestAttrs); // 1st priority
             } else if ( array_key_exists('wildcard_action',$matchingRoutes) ) {
                 $isAllowed = $this->isAllowed($matchingRoutes['wildcard_action'],$requestAttrs); // 2nd priority
+            } else {
+                $isAllowed = false; // default is to deny access
             }
         }
 
@@ -99,36 +99,34 @@ abstract class AccessManager
     {
         // HERE: determine if *any* role of this user allows access by its rules for this route
 
-        $isAllowed = false;
-
         foreach ($this->_sessionUser->roles as $r) {
 
             if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
                 $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
-                //$isAllowed = $this->isAllowed($this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams'],$accessCheckDelegate);
                 if ( empty($accessCheckDelegate) ) {
-                    $isAllowed = false;
+                    // do nothing, continue checking...
                 } else if ( is_callable($accessCheckDelegate) ) {
                     // Callable delegate
                     $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
+                    if ($isAllowed) {
+                        return true; // grant & exit
+                    }
                 } else { // %FIXME: check that it's a string?
                     // Scalar : If we get through the case statement without aborting, access is allowed
                     switch ($accessCheckDelegate) {
                         case 'all':
                             $isAllowed = true; // continue => grant access
+                            if ($isAllowed) {
+                                return true; // grant & exit
+                            }
                             break;
-                        default:
-                            $isAllowed = false;
                     } // switch()
                 }
-                if ($isAllowed) {
-                    break; // found one that allows access %TODO: be sure this breaks for loop not just if clause
-                } // ...otherwise keep searching
             }
 
         } // foreach()
 
-        return $isAllowed;
+        return false; // dey access
 
     } // isAllowed()
 
