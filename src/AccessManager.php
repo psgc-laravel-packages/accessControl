@@ -73,18 +73,7 @@ abstract class AccessManager
             }
 
             // === Do the check (set $isAllowed) ===
-if (0) {
-            // find access check scalar or delegate function/closure
-            if ( array_key_exists('exact',$matchingRoutes) ) {
-                $isAllowed = $this->isAllowedOG($matchingRoutes['exact'],$requestAttrs); // 1st priority
-            } else if ( array_key_exists('wildcard_action',$matchingRoutes) ) {
-                $isAllowed = $this->isAllowedOG($matchingRoutes['wildcard_action'],$requestAttrs); // 2nd priority
-            } else {
-                $isAllowed = false; // default is to deny access
-            }
-} else {
-            $isAllowed = $this->isAllowedNEW($matchingRoutes,$requestAttrs); // 2nd priority
-}
+            $isAllowed = $this->isAllowed($matchingRoutes,$requestAttrs); // 2nd priority
 
         }
 
@@ -97,14 +86,43 @@ if (0) {
 
     } // handle()
 
-    /*
-    protected function checkMatrix()
+    protected function checkMatrix($matrixKey,$requestAttrs,$r)
     {
+        $isAllowed = null; // default: not set, may defer to other rule or lower priority rule if one is set
+
+        if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
+
+            if ( isset($this->_accessMatrix[$matrixKey][$r->name]) && (false===$this->_accessMatrix[$matrixKey][$r->name]) ) {
+
+                // case: not a true empty, the permission is set to false
+                $isAllowed = false; // set, will not check lower priority rules
+
+            } else {
+
+                // False case is covered above so now we can use 'empty' w/o worrying about losing the 'false' value...
+                if ( empty($this->_accessMatrix[$matrixKey][$r->name]) ) {
+    
+                    $isAllowed = null; // not set, may defer to lower priority rule if one is set
+    
+                } else {
+    
+                    $accessCheckDelegate = $this->_accessMatrix[$matrixKey][$r->name]; // safe to access
+                    if ( is_callable($accessCheckDelegate) ) {
+                        // Callable delegate, returns boolean
+                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]);
+                    } else {
+                        $isAllowed = $accessCheckDelegate;
+                    }
+                }
+
+            }
+        }
+
+        return $isAllowed;
     }
-     */
     
     // uses $this->_accessMatrix, // $this->_sessionUser
-    protected function isAllowedNEW($matchingRoutes,$requestAttrs) 
+    protected function isAllowed($matchingRoutes,$requestAttrs) 
     {
         // HERE: determine if *any* role of this user allows access by its rules for this route
 
@@ -114,36 +132,12 @@ if (0) {
         foreach ($this->_sessionUser->roles as $r) {
 
             if ( array_key_exists('exact',$matchingRoutes) ) {
-                $matrixKey = $matchingRoutes['exact'];
-                if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
-                    $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
-                    if ( empty($accessCheckDelegate) ) {
-                        // do nothing, continue checking...
-                    } else if ( is_callable($accessCheckDelegate) ) {
-                        // Callable delegate, returns boolean
-                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
-                    } else {
-                        // Scalar boolean
-                        $isAllowed = $accessCheckDelegate; 
-                    }
-                }
+                $isAllowed = $this->checkMatrix( $matchingRoutes['exact'], $requestAttrs, $r );
             } 
 
             // Check this clause if not yet set
             if ( is_null($isAllowed) && array_key_exists('wildcard_action',$matchingRoutes) ) {
-                $matrixKey = $matchingRoutes['wildcard_action'];
-                if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
-                    $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
-                    if ( empty($accessCheckDelegate) ) {
-                        // do nothing, continue checking...
-                    } else if ( is_callable($accessCheckDelegate) ) {
-                        // Callable delegate, returns boolean
-                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
-                    } else {
-                        // Scalar boolean
-                        $isAllowed = $accessCheckDelegate; 
-                    }
-                }
+                $isAllowed = $this->checkMatrix( $matchingRoutes['wildcard_action'], $requestAttrs, $r );
             }
 
             if ( true === $isAllowed ) {
@@ -153,42 +147,6 @@ if (0) {
 
         $isAllowed = is_null($isAllowed) ? false : $isAllowed;
         return $isAllowed;
-
-    } // isAllowed()
-
-    // uses $this->_accessMatrix, // $this->_sessionUser
-    protected function isAllowedOG($matrixKey,$requestAttrs) // matrixKey is route 'name', either exact or a wildcard variant
-    {
-        // HERE: determine if *any* role of this user allows access by its rules for this route
-
-        foreach ($this->_sessionUser->roles as $r) {
-
-            if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
-                $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
-                if ( empty($accessCheckDelegate) ) {
-                    // do nothing, continue checking...
-                } else if ( is_callable($accessCheckDelegate) ) {
-                    // Callable delegate
-                    $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
-                    if ($isAllowed) {
-                        return true; // grant & exit
-                    }
-                } else { // %FIXME: check that it's a string?
-                    // Scalar : If we get through the case statement without aborting, access is allowed
-                    switch ($accessCheckDelegate) {
-                        case 'all':
-                            $isAllowed = true; // continue => grant access
-                            if ($isAllowed) {
-                                return true; // grant & exit
-                            }
-                            break;
-                    } // switch()
-                }
-            }
-
-        } // foreach()
-
-        return false; // dey access
 
     } // isAllowed()
 
