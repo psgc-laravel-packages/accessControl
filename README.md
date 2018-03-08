@@ -17,6 +17,11 @@ protected function setSuperadminRoles();
 }
 ```
 
+Route names must be in format:
+
+    {prefix}.{resource}.{action}
+    api.widgets.show
+
 ## Example:
 
     use PsgcLaravelPackages\AccessControl\AccessManager;
