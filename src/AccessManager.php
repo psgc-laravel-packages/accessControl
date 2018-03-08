@@ -8,9 +8,7 @@ abstract class AccessManager
     // %REQUIRES: User model implement ->roles attribute (eg, relations)
     // %REQUIRES: User model implement ->username // %TODO: make a function so it's generic returns some kind of GUID, or a GUID
 
-    protected $_sessionUser = null;
     protected $_superadminRoles = []; // roles that override access matrix checking
-    protected $_accessMatrix = [];
 
     abstract protected function accessMatrix(); 
 
@@ -31,16 +29,16 @@ abstract class AccessManager
             //return \Redirect::route('login');
         }
         $this->setSuperadminRoles(); // must be first!!
-        $this->_sessionUser = $sessionUser = \Auth::user();
+        $sessionUser = \Auth::user();
 
         if ( $this->isSuperadmin($sessionUser) ) {
 
-            $isAllowed = true;
+            $is = true;
 
         } else {
 
             // Not a super admin, so use access matrix
-            $this->_accessMatrix = $this->accessMatrix();
+            $accessMatrix = $this->accessMatrix();
     
             // === Parse request ===
 
@@ -49,6 +47,7 @@ abstract class AccessManager
                 'routeparams' => $request->route()->parameters(),
                 'queryparams' => $request->all(),
             ];
+
             $isOK = preg_match("/(\w+)\.(\w+)\.(\w+)/", $requestAttrs['routename'], $matches); // parse route, eg 'api.widgets.store'
             if ( !$isOK || !is_array($matches) || (4>count($matches)) ) {
                 throw new \Exception('Malformed route :'.$requestAttrs['routename'].', must be formatted {prefix}.{resource}.{action}');
@@ -64,20 +63,20 @@ abstract class AccessManager
             //    ~ TBD: wildcard_resource --  eg: api.*.index
 
             $matchingRoutes = []; // keys
-            if ( array_key_exists($requestAttrs['routename'],$this->_accessMatrix) ) {
+            if ( array_key_exists($requestAttrs['routename'],$accessMatrix) ) {
                 $matchingRoutes['exact'] = $requestAttrs['routename']; // exact match
             }
             $wildcardActionRoute = implode('.',[$routePrefix,$routeResource,'*']);
-            if ( array_key_exists($wildcardActionRoute,$this->_accessMatrix) ) {
+            if ( array_key_exists($wildcardActionRoute,$accessMatrix) ) {
                 $matchingRoutes['wildcard_action'] = $wildcardActionRoute; // eg api.widgets.*
             }
 
-            // === Do the check (set $isAllowed) ===
-            $isAllowed = $this->isAllowed($matchingRoutes,$requestAttrs); // 2nd priority
+            // === Do the check (set $is) ===
+            $is = $this->isAllowed($accessMatrix, $matchingRoutes,$requestAttrs, $sessionUser);
 
         }
 
-        if (!$isAllowed) {
+        if (!$is) {
             $jsonStr = json_encode(['route'=>$requestAttrs['routename'],'user'=>$sessionUser->username,'roles'=>$sessionUser->roles]);
             \App::abort(403, 'Unauthorized action for role: '.$jsonStr);
         }
@@ -86,69 +85,74 @@ abstract class AccessManager
 
     } // handle()
 
-    protected function checkMatrix($matrixKey,$requestAttrs,$r)
+    
+    public function checkMatrix(&$accessMatrix)
     {
-        $isAllowed = null; // default: not set, may defer to other rule or lower priority rule if one is set
+    } // checkMatrix()
 
-        if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
 
-            if ( isset($this->_accessMatrix[$matrixKey][$r->name]) && (false===$this->_accessMatrix[$matrixKey][$r->name]) ) {
+    protected function isAllowed(&$accessMatrix, $matchingRoutes,$requestAttrs,$sessionUser)  : ?bool
+    {
+        // HERE: determine if *any* role of this user allows access by its rules for this route
+
+        $is = null;
+
+        foreach ($sessionUser->roles as $r) {
+
+            if ( array_key_exists('exact',$matchingRoutes) ) {
+                $is = $this->checkRule( $accessMatrix, $matchingRoutes['exact'], $requestAttrs, $r, $sessionUser );
+            } 
+
+            // Check this clause if not yet set
+            if ( is_null($is) && array_key_exists('wildcard_action',$matchingRoutes) ) {
+                $is = $this->checkRule( $accessMatrix, $matchingRoutes['wildcard_action'], $requestAttrs, $r, $sessionUser );
+            }
+
+            if ( true === $is ) {
+                break; // found a role that allows access per rules
+            }
+        } // foreach($sessionUser->roles)
+
+        $is = is_null($is) ? false : $is;
+        return $is;
+
+    } // isAllowed()
+
+    protected function checkRule(&$accessMatrix, $matrixKey,$requestAttrs,$r,$sessionUser) : ?bool
+    {
+        $is = null; // default: not set, may defer to other rule or lower priority rule if one is set
+
+        if ( array_key_exists($matrixKey,$accessMatrix) ) {
+
+            if ( isset($accessMatrix[$matrixKey][$r->name]) && (false===$accessMatrix[$matrixKey][$r->name]) ) {
 
                 // case: not a true empty, the permission is set to false
-                $isAllowed = false; // set, will not check lower priority rules
+                $is = false; // set, will not check lower priority rules
 
             } else {
 
                 // False case is covered above so now we can use 'empty' w/o worrying about losing the 'false' value...
-                if ( empty($this->_accessMatrix[$matrixKey][$r->name]) ) {
+                if ( empty($accessMatrix[$matrixKey][$r->name]) ) {
     
-                    $isAllowed = null; // not set, may defer to lower priority rule if one is set
+                    $is = null; // not set, may defer to lower priority rule if one is set
     
                 } else {
     
-                    $accessCheckDelegate = $this->_accessMatrix[$matrixKey][$r->name]; // safe to access
+                    $accessCheckDelegate = $accessMatrix[$matrixKey][$r->name]; // safe to access
                     if ( is_callable($accessCheckDelegate) ) {
                         // Callable delegate, returns boolean
-                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]);
+                        $is = call_user_func_array($accessCheckDelegate,[$sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]);
                     } else {
-                        $isAllowed = $accessCheckDelegate;
+                        $is = $accessCheckDelegate;
                     }
                 }
 
             }
         }
 
-        return $isAllowed;
-    }
-    
-    // uses $this->_accessMatrix, // $this->_sessionUser
-    protected function isAllowed($matchingRoutes,$requestAttrs) 
-    {
-        // HERE: determine if *any* role of this user allows access by its rules for this route
+        return $is;
 
-        $isAllowed = null;
-
-//dd($this->_sessionUser->roles->pluck('name'));
-        foreach ($this->_sessionUser->roles as $r) {
-
-            if ( array_key_exists('exact',$matchingRoutes) ) {
-                $isAllowed = $this->checkMatrix( $matchingRoutes['exact'], $requestAttrs, $r );
-            } 
-
-            // Check this clause if not yet set
-            if ( is_null($isAllowed) && array_key_exists('wildcard_action',$matchingRoutes) ) {
-                $isAllowed = $this->checkMatrix( $matchingRoutes['wildcard_action'], $requestAttrs, $r );
-            }
-
-            if ( true === $isAllowed ) {
-                break; // found a role that allows access per rules
-            }
-        } // foreach($this->_sessionUser->roles)
-
-        $isAllowed = is_null($isAllowed) ? false : $isAllowed;
-        return $isAllowed;
-
-    } // isAllowed()
+    } // checkRule()
 
     protected function isSuperadmin($sessionUser)
     {
