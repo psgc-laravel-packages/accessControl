@@ -73,15 +73,19 @@ abstract class AccessManager
             }
 
             // === Do the check (set $isAllowed) ===
-
+if (0) {
             // find access check scalar or delegate function/closure
             if ( array_key_exists('exact',$matchingRoutes) ) {
-                $isAllowed = $this->isAllowed($matchingRoutes['exact'],$requestAttrs); // 1st priority
+                $isAllowed = $this->isAllowedOG($matchingRoutes['exact'],$requestAttrs); // 1st priority
             } else if ( array_key_exists('wildcard_action',$matchingRoutes) ) {
-                $isAllowed = $this->isAllowed($matchingRoutes['wildcard_action'],$requestAttrs); // 2nd priority
+                $isAllowed = $this->isAllowedOG($matchingRoutes['wildcard_action'],$requestAttrs); // 2nd priority
             } else {
                 $isAllowed = false; // default is to deny access
             }
+} else {
+            $isAllowed = $this->isAllowedNEW($matchingRoutes,$requestAttrs); // 2nd priority
+}
+
         }
 
         if (!$isAllowed) {
@@ -92,10 +96,68 @@ abstract class AccessManager
         return $next($request); // ...else allowed, return
 
     } // handle()
+
+    /*
+    protected function checkMatrix()
+    {
+    }
+     */
     
+    // uses $this->_accessMatrix, // $this->_sessionUser
+    protected function isAllowedNEW($matchingRoutes,$requestAttrs) 
+    {
+        // HERE: determine if *any* role of this user allows access by its rules for this route
+
+        $isAllowed = null;
+
+//dd($this->_sessionUser->roles->pluck('name'));
+        foreach ($this->_sessionUser->roles as $r) {
+
+            if ( array_key_exists('exact',$matchingRoutes) ) {
+                $matrixKey = $matchingRoutes['exact'];
+                if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
+                    $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
+                    if ( empty($accessCheckDelegate) ) {
+                        // do nothing, continue checking...
+                    } else if ( is_callable($accessCheckDelegate) ) {
+                        // Callable delegate, returns boolean
+                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
+                    } else {
+                        // Scalar boolean
+                        $isAllowed = $accessCheckDelegate; 
+                    }
+                }
+            } 
+
+            // Check this clause if not yet set
+            if ( is_null($isAllowed) && array_key_exists('wildcard_action',$matchingRoutes) ) {
+                $matrixKey = $matchingRoutes['wildcard_action'];
+                if ( array_key_exists($matrixKey,$this->_accessMatrix) ) {
+                    $accessCheckDelegate = !empty($this->_accessMatrix[$matrixKey][$r->name]) ? $this->_accessMatrix[$matrixKey][$r->name] : null; // find the function to cll
+                    if ( empty($accessCheckDelegate) ) {
+                        // do nothing, continue checking...
+                    } else if ( is_callable($accessCheckDelegate) ) {
+                        // Callable delegate, returns boolean
+                        $isAllowed = call_user_func_array($accessCheckDelegate,[$this->_sessionUser,$requestAttrs['routeparams'],$requestAttrs['queryparams']]); // call function
+                    } else {
+                        // Scalar boolean
+                        $isAllowed = $accessCheckDelegate; 
+                    }
+                }
+            }
+
+            if ( true === $isAllowed ) {
+                break; // found a role that allows access per rules
+            }
+        } // foreach($this->_sessionUser->roles)
+
+        $isAllowed = is_null($isAllowed) ? false : $isAllowed;
+        return $isAllowed;
+
+    } // isAllowed()
 
     // uses $this->_accessMatrix, // $this->_sessionUser
-    protected function isAllowed($matrixKey,$requestAttrs) // matrixKey is route 'name', either exact or a wildcard variant
+    protected function isAllowedOG($matrixKey,$requestAttrs) // matrixKey is route 'name', either exact or a wildcard variant
     {
         // HERE: determine if *any* role of this user allows access by its rules for this route
 
