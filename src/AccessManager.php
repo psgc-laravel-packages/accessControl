@@ -39,7 +39,7 @@ abstract class AccessManager
 
             // Not a super admin, so use access matrix
             $accessMatrix = $this->accessMatrix();
-    
+
             // === Parse request ===
 
             $requestAttrs = [
@@ -47,33 +47,8 @@ abstract class AccessManager
                 'routeparams' => $request->route()->parameters(),
                 'queryparams' => $request->all(),
             ];
-
-            $isOK = preg_match("/(\w+)\.(\w+)\.(\w+)/", $requestAttrs['routename'], $matches); // parse route, eg 'api.widgets.store'
-            if ( !$isOK || !is_array($matches) || (4>count($matches)) ) {
-                throw new \Exception('Malformed route :'.$requestAttrs['routename'].', must be formatted {prefix}.{resource}.{action}');
-            }
-            $routePrefix   = $matches[1]; // eg 'api'
-            $routeResource = $matches[2]; // eg 'widgets'
-            $routeAction   = $matches[3]; // eg 'store'
     
-            // === Find matching routes in access matrix ===
-            // 3 possibilities:
-            //    ~ exact           --  eg: api.widgets.update
-            //    ~ wildcard_action --  eg: api.widgets.*
-            //    ~ TBD: wildcard_resource --  eg: api.*.index
-
-            $matchingRoutes = []; // keys
-            if ( array_key_exists($requestAttrs['routename'],$accessMatrix) ) {
-                $matchingRoutes['exact'] = $requestAttrs['routename']; // exact match
-            }
-            $wildcardActionRoute = implode('.',[$routePrefix,$routeResource,'*']);
-            if ( array_key_exists($wildcardActionRoute,$accessMatrix) ) {
-                $matchingRoutes['wildcard_action'] = $wildcardActionRoute; // eg api.widgets.*
-            }
-
-            // === Do the check (set $is) ===
-            $is = $this->isAllowed($accessMatrix, $matchingRoutes,$requestAttrs, $sessionUser);
-
+            $is = $this->checkMatrix($accessMatrix, $requestAttrs, $sessionUser);
         }
 
         if (!$is) {
@@ -86,8 +61,37 @@ abstract class AccessManager
     } // handle()
 
     
-    public function checkMatrix(&$accessMatrix)
+    public function checkMatrix(&$accessMatrix, $requestAttrs, $sessionUser) : ?bool
     {
+
+        $isOK = preg_match("/(\w+)\.(\w+)\.(\w+)/", $requestAttrs['routename'], $matches); // parse route, eg 'api.widgets.store'
+        if ( !$isOK || !is_array($matches) || (4>count($matches)) ) {
+            throw new \Exception('Malformed route :'.$requestAttrs['routename'].', must be formatted {prefix}.{resource}.{action}');
+        }
+        $routePrefix   = $matches[1]; // eg 'api'
+        $routeResource = $matches[2]; // eg 'widgets'
+        $routeAction   = $matches[3]; // eg 'store'
+    
+        // === Find matching routes in access matrix ===
+        // 3 possibilities:
+        //    ~ exact           --  eg: api.widgets.update
+        //    ~ wildcard_action --  eg: api.widgets.*
+        //    ~ TBD: wildcard_resource --  eg: api.*.index
+
+        $matchingRoutes = []; // keys
+        if ( array_key_exists($requestAttrs['routename'],$accessMatrix) ) {
+            $matchingRoutes['exact'] = $requestAttrs['routename']; // exact match
+        }
+        $wildcardActionRoute = implode('.',[$routePrefix,$routeResource,'*']);
+        if ( array_key_exists($wildcardActionRoute,$accessMatrix) ) {
+            $matchingRoutes['wildcard_action'] = $wildcardActionRoute; // eg api.widgets.*
+        }
+
+        // === Do the check (set $is) ===
+        $is = $this->isAllowed($accessMatrix, $matchingRoutes,$requestAttrs, $sessionUser);
+
+        return $is;
+
     } // checkMatrix()
 
 
