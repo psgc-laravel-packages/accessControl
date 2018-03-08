@@ -48,7 +48,7 @@ abstract class AccessManager
                 'queryparams' => $request->all(),
             ];
     
-            $is = $this->checkMatrix($accessMatrix, $requestAttrs, $sessionUser);
+            $is = self::checkMatrix($accessMatrix, $requestAttrs, $sessionUser);
         }
 
         if (!$is) {
@@ -61,7 +61,10 @@ abstract class AccessManager
     } // handle()
 
     
-    public function checkMatrix(&$accessMatrix, $requestAttrs, $sessionUser) : ?bool
+    // Use 'access matrix' to determine permission:
+    //   ~ parse routename to find matches in matrix (including wildcards)
+    //   ~ pass matching routes to isAllowed() method
+    public static function checkMatrix(&$accessMatrix, $requestAttrs, $sessionUser) : ?bool
     {
 
         $isOK = preg_match("/(\w+)\.(\w+)\.(\w+)/", $requestAttrs['routename'], $matches); // parse route, eg 'api.widgets.store'
@@ -88,14 +91,17 @@ abstract class AccessManager
         }
 
         // === Do the check (set $is) ===
-        $is = $this->isAllowed($accessMatrix, $matchingRoutes,$requestAttrs, $sessionUser);
+        $is = self::isAllowed($accessMatrix, $matchingRoutes,$requestAttrs, $sessionUser);
 
         return $is;
 
     } // checkMatrix()
 
 
-    protected function isAllowed(&$accessMatrix, $matchingRoutes,$requestAttrs,$sessionUser)  : ?bool
+    // Use 'access matrix' and any matching routes found to determine permission:
+    //   ~ Iterate over all the user's roles
+    //   ~ Each role is checked with matching rules/routes in order rule priority. If access is granted loop breaks.
+    protected static function isAllowed(&$accessMatrix, $matchingRoutes,$requestAttrs,$sessionUser)  : ?bool
     {
         // HERE: determine if *any* role of this user allows access by its rules for this route
 
@@ -104,12 +110,12 @@ abstract class AccessManager
         foreach ($sessionUser->roles as $r) {
 
             if ( array_key_exists('exact',$matchingRoutes) ) {
-                $is = $this->checkRule( $accessMatrix, $matchingRoutes['exact'], $requestAttrs, $r, $sessionUser );
+                $is = self::checkRule( $accessMatrix, $matchingRoutes['exact'], $requestAttrs, $r, $sessionUser );
             } 
 
             // Check this clause if not yet set
             if ( is_null($is) && array_key_exists('wildcard_action',$matchingRoutes) ) {
-                $is = $this->checkRule( $accessMatrix, $matchingRoutes['wildcard_action'], $requestAttrs, $r, $sessionUser );
+                $is = self::checkRule( $accessMatrix, $matchingRoutes['wildcard_action'], $requestAttrs, $r, $sessionUser );
             }
 
             if ( true === $is ) {
@@ -122,7 +128,11 @@ abstract class AccessManager
 
     } // isAllowed()
 
-    protected function checkRule(&$accessMatrix, $matrixKey,$requestAttrs,$r,$sessionUser) : ?bool
+    // Check an individual 'rule'
+    //   ~ if false, deny access
+    //   ~ else if true, allow accces
+    //   ~ else if null or not set, defer
+    protected static function checkRule(&$accessMatrix, $matrixKey,$requestAttrs,$r,$sessionUser) : ?bool
     {
         $is = null; // default: not set, may defer to other rule or lower priority rule if one is set
 
