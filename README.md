@@ -40,6 +40,8 @@ For accounts, users with either the manager of the staff role have permission fo
 
 For widgets, both roles are allowed 'index' access (eg, to view a list of widgets). However, a staff role can only update a widget if it 'owns' the widget. Ownership is determined by a closure, which can delegate the ownership logic to the model (as shown), or implement the logic inline inside the closure itself.
 
+If a user has multiple roles, then access will be granted if any one of the roles allows access based on the rules described above. 
+
 ## Usage:
 
 1. extend base class AccessManager...
