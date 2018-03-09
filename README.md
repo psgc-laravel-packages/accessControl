@@ -1,6 +1,6 @@
 # Access Control for use in Laravel Middleware
 
-The AccessManager abstract class uses an "access matrix" to determine whether a user with a particular 'role' can perform an action. It is based on route names and depends on a specific but common route naming style. Although Laravel has [authorization policiy support built-in](https://laravel.com/docs/5.6/authorization#creating-policies), I prefer to have policies together in one place, as opposed to one-class per policy under a policies folder.
+The AccessManager abstract class uses an "access matrix" to determine whether a user with a particular 'role' can perform an action. It is based on route names and depends on a specific but common route naming style. Although Laravel has [authorization policiy support built-in](https://laravel.com/docs/5.6/authorization#creating-policies), I prefer to have policies together in one place, as opposed to one-class-per-policy under a policies folder.
 
 Using the AccessManager, permissions for a set of resources such as 'accounts' and 'widgets' can be defined inside a 'matrix' (array) like follows:
 
