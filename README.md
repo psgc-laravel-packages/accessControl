@@ -1,5 +1,45 @@
 # Access Control for use in Laravel Middleware
 
+The AccessManager abstract class uses an "access matrix" to determine whether a user with a particular 'role' can perform an action. It is based on route names and depends on a specific but common route naming style.
+
+Using the AccessManager, permissions for a set of resources such as 'accounts' and 'widgets' can be defined inside a 'matrix' (array) like follows:
+
+```php
+$matrix = [
+
+    // ---Accounts ---
+
+    'api.accounts.*'=>[
+        'manager'=>true,
+        'staff'=>true,
+    ],
+    'api.accounts.destroy'=>[
+        'staff'=>false,
+    ],
+
+
+    // --- Widgets ---
+
+    'api.widgets.index'=>[
+        'manager'=>true,
+        'staff'=>true,
+    ],
+    'api.widgets.update'=>[
+        'staff'=>function($user,$routeParams,$queryParams) { // delegate as closure
+            $widget = Widget::findOrFail($routeParams['widget']);
+            $isAllowed =  ($widget instanceof Ownable) ?  $widget->isOwnedBy() : false;
+            return $isAllowed;
+        },
+    ],
+];
+```
+
+In the example above, a user can have one or more of the following roles: 'manager', 'staff'.
+
+For accounts, users with either the manager of the staff role have permission for routes that match the 'wildcard', for example 'api.accounts.index'. However, only managers can delete (destroy) an account. The more-specific role will override the wildcard, but only if a role has a permission override specifically listed (which is why managers are granted destroy access).
+
+For widgets, both roles are allowed 'index' access (eg, to view a list of widgets). However, a staff role can only update a widget if it 'owns' the widget. Ownership is determined by a closure, which can delegate the ownership logic to the model (as shown), or implement the logic inline inside the closure itself.
+
 ## Usage:
 
 1. extend base class AccessManager...
@@ -24,58 +64,35 @@ Route names must be in format:
 
 ## Example:
 
-    use PsgcLaravelPackages\AccessControl\AccessManager;
+```php
+use PsgcLaravelPackages\AccessControl\AccessManager;
 
-    class CheckSiteRole extends AccessManager
-    {
+class CheckSiteRole extends AccessManager
+{
 
-        protected function accessMatrix() {
+    protected function accessMatrix() {
         return [
-    
-                'site.dashboard.show'=>[
-                    //'super-admin'=>'all',
-                    'fielder'=>'all',
-                    'project-manager'=>'all',
-                ],
-    
-                'site.accounts.index'=>[
-                    //'super-admin'=>'all',
-                    'fielder'=>'all',
-                    'project-manager'=>'all',
-                ],
-                ...
-                'site.profiles.show'=>[
-                    //'super-admin'=>'all',
-                    'fielder'=>function($user,$routeParams,$queryParams) {
-                        $user = \App\Models\User::findByUsername($routeParams['username']);
-                        $isAllowed = ($user->id == $this->_sessionUser->id);
-                        return $isAllowed;
-                    },
-                    'project-manager'=>function($user,$routeParams,$queryParams) {
-                        $user = \App\Models\User::findByUsername($routeParams['username']);
-                        $isAllowed = ($user->id == $this->_sessionUser->id);
-                        return $isAllowed;
-                    },
-                ],
-                ...
-                'agency.formcomponents.show'=>[
-                    //'super-admin'=>'all',
-                    'agency-admin'=>function($user,$routeParams,$queryParams) {
-                        $agency = $user->ofAgency();
-                        $formcomponent = \App\Models\Formcomponent::findBySlug($routeParams['formcomponent']);
-                        $isAllowed = \App\Libs\AccessControl::isOperationOnFormcomponentByOrganizationAllowed($formcomponent,$agency,'read');
-                        return $isAllowed;
-                    },
-                    'department-admin'=>function($user,$routeParams,$queryParams) {
-                    $department = $user->ofDepartment();
-                        $formcomponent = \App\Models\Formcomponent::findBySlug($routeParams['formcomponent']);
-                        $isAllowed = \App\Libs\AccessControl::isOperationOnFormcomponentByOrganizationAllowed($formcomponent,$department,'read');
-                        return $isAllowed;
-                    },
-                ],
-                ...
-            ];
-        }
+            'api.accounts.*'=>[
+                'manager'=>true,
+                'staff'=>true,
+            ],
+            'api.accounts.destroy'=>[
+                'staff'=>false,
+            ],
+            'api.widgets.index'=>[
+                'manager'=>true,
+                'staff'=>true,
+            ],
+            'api.widgets.update'=>[
+                'staff'=>function($user,$routeParams,$queryParams) { // delegate as closure
+                    $widget = Widget::findOrFail($routeParams['widget']);
+                    $isAllowed =  ($widget instanceof Ownable) ?  $widget->isOwnedBy() : false;
+                    return $isAllowed;
+                },
+            ]
+        ];
+    }
+```
 
 Edit app/Http/Kernel.php to update route middleware:
 
@@ -91,6 +108,8 @@ Add via middleware in routes file...:
 
     Route::group(['middleware'=>['checksite'], 'as'=>'site.', 'namespace'=>'Site'], function()
     {
+       ...
+       // all routes inside this group whill use CheckSiteRole middleware
        ...
     });
 
