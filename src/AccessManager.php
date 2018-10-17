@@ -25,8 +25,8 @@ abstract class AccessManager
 
         // Assumes a user is logged in: this takes care of the 'auth' part of the middleware
         if ( \Auth::guest() ) {
-            \App::abort(403, 'Unauthorized action.');
-            //return \Redirect::route('login');
+            //\App::abort(403, 'Unauthorized action.');
+            return \Redirect::route('login');
         }
         $this->setSuperadminRoles(); // must be first!!
         $sessionUser = \Auth::user();
